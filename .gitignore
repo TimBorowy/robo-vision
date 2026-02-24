@@ -1,2 +1,4 @@
 /calibration_images
 /.vscode
+
+opponent_color_calibration.npz
