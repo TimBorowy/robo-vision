@@ -15,10 +15,7 @@ FRAME_HEIGHT = 720
 MIN_CONTOUR_AREA = 1000 # Minimum pixel area for a contour to be considered a bot
 SMOOTHING_ALPHA = 0.4 # Alpha for exponential moving average smoothing (0.0 - 1.0, higher means less smoothing)
 
-# IMPORTANT: List of ArUco IDs used for OUR BOT.
-# ID 3 is on the left side, ID 1 on the right side.
-OUR_BOT_ARUCO_IDS = [1, 3]
-
+OUR_BOT_ARUCO_IDS = [1, 3] # ID 3 is on the left side, ID 1 on the right side.
 ARUCO_MARKER_SIZE_MM = 100 # IMPORTANT: The actual physical side length of your ArUco marker in millimeters
 
 # Angle margin for considering "FORWARD" when logging autonomous commands
@@ -27,9 +24,15 @@ FORWARD_ANGLE_MARGIN_DEG = 5
 # Logging interval for autonomous control decisions
 LOG_INTERVAL_SECONDS = 2
 
-# Global variables for camera calibration results
+# File names for calibration data
+CAMERA_CALIBRATION_FILE = "camera_calibration.npz"
+OPPONENT_COLOR_CALIBRATION_FILE = "opponent_color_calibration.npz"
+
+# Global variables for calibration results
 camera_matrix = None
 dist_coeffs = None
+opponent_lower_hsv = None
+opponent_upper_hsv = None
 
 # ==============================
 # Helpers
@@ -57,13 +60,14 @@ def contour_center(contour):
   cy = int(M["m01"] / M["m00"])
   return (cx, cy)
 
-def load_camera_params(filename="camera_calibration.npz"):
+def load_camera_params(filename=CAMERA_CALIBRATION_FILE):
     """Loads camera intrinsic matrix and distortion coefficients."""
     global camera_matrix, dist_coeffs
     if not os.path.exists(filename):
         print(f"Error: Camera calibration file '{filename}' not found.")
         print("Please run 'calibrate_camera.py' first to generate it.")
-        print("Using dummy values for now. ArUco pose estimation will be inaccurate!")
+        print("ArUco pose estimation will be inaccurate without calibration!")
+        # Fallback to dummy values (POSE ESTIMATION WILL BE WRONG WITHOUT PROPER CALIBRATION)
         camera_matrix = np.array([[FRAME_WIDTH, 0, FRAME_WIDTH/2], [0, FRAME_WIDTH, FRAME_HEIGHT/2], [0, 0, 1]], dtype=np.float32)
         dist_coeffs = np.zeros((4, 1), dtype=np.float32)
         return False
@@ -75,9 +79,32 @@ def load_camera_params(filename="camera_calibration.npz"):
         return True
     except Exception as e:
         print(f"Error loading camera calibration: {e}")
-        print("Using dummy values for now. ArUco pose estimation will be inaccurate!")
+        print("ArUco pose estimation will be inaccurate without calibration!")
         camera_matrix = np.array([[FRAME_WIDTH, 0, FRAME_WIDTH/2], [0, FRAME_WIDTH, FRAME_HEIGHT/2], [0, 0, 1]], dtype=np.float32)
         dist_coeffs = np.zeros((4, 1), dtype=np.float32)
+        return False
+
+def load_opponent_color_params(filename=OPPONENT_COLOR_CALIBRATION_FILE):
+    """Loads opponent bot's HSV color range."""
+    global opponent_lower_hsv, opponent_upper_hsv
+    if not os.path.exists(filename):
+        print(f"Error: Opponent color calibration file '{filename}' not found.")
+        print("Please run 'color_calibrator.py' first to set and save color ranges.")
+        print("Using default bluish-green values for now.")
+        opponent_lower_hsv = np.array([70, 100, 100])
+        opponent_upper_hsv = np.array([100, 255, 255])
+        return False
+    try:
+        npzfile = np.load(filename)
+        opponent_lower_hsv = npzfile['lower_hsv']
+        opponent_upper_hsv = npzfile['upper_hsv']
+        print(f"Loaded opponent color calibration from {filename}")
+        return True
+    except Exception as e:
+        print(f"Error loading opponent color calibration: {e}")
+        print("Using default bluish-green values for now.")
+        opponent_lower_hsv = np.array([70, 100, 100])
+        opponent_upper_hsv = np.array([100, 255, 255])
         return False
 
 # ==============================
@@ -85,7 +112,8 @@ def load_camera_params(filename="camera_calibration.npz"):
 # ==============================
 
 print("Starting application...")
-calibration_loaded = load_camera_params() # Load calibration at startup
+calibration_loaded = load_camera_params() # Load camera calibration at startup
+color_calibration_loaded = load_opponent_color_params() # Load opponent color calibration
 
 start_time_profiling = time.time()
 # ==============================
@@ -123,8 +151,11 @@ print("Starting robot tracking prototype. Press 'ESC' to exit.")
 while True:
   ret, frame = cap.read()
   if not ret:
-    print("Failed to grab frame. Exiting...")
-    break
+    print("Failed to grab frame. Skipping this frame...")
+    # Allow ESC to exit even if frames are not coming
+    if cv2.waitKey(1) == 27:
+        break
+    continue # Skip the rest of the loop for this iteration
 
   display = frame.copy()
   gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -150,7 +181,7 @@ while True:
         y_max = int(np.max(pts[:, 1]))
 
         current_bbox = (x_min, y_min, x_max, y_max)
-        all_our_bboxes.append(current_bbox) # Store individual marker bbox
+        all_our_bboxes.append(current_bbox)
 
         current_center = (int(pts[:, 0].mean()), int(pts[:, 1].mean()))
         
@@ -163,10 +194,9 @@ while True:
 
         current_orientation_rad = None
         if rvecs is not None and len(rvecs) > 0:
-            rvec = rvecs[0][0] # Rotation vector
-            tvec = tvecs[0][0] # Translation vector
+            rvec = rvecs[0][0]
+            tvec = tvecs[0][0]
 
-            # Project a forward vector for the marker itself
             object_points = np.array([[0, 0, 0], [0, ARUCO_MARKER_SIZE_MM / 2, 0]], dtype=np.float32).reshape(-1, 1, 3)
             img_pts, _ = cv2.projectPoints(object_points, rvec, tvec, camera_matrix, dist_coeffs)
 
@@ -179,7 +209,6 @@ while True:
             dy_forward = p_forward_end[1] - p_center_fwd[1]
             current_orientation_rad = math.atan2(dy_forward, dx_forward)
         
-        # Store data based on marker ID
         if marker_id == 1: # Right marker
             marker1_data = {'center': current_center, 'orientation_rad': current_orientation_rad, 'bbox': current_bbox}
         elif marker_id == 3: # Left marker
@@ -203,11 +232,7 @@ while True:
     dy_lr = marker1_data['center'][1] - marker3_data['center'][1]
 
     # Deriving forward orientation:
-    # The vector (dx_lr, dy_lr) points from left (ID 3) to right (ID 1).
-    # If the robot is generally facing "up" in the image, (dx_lr, dy_lr) will be roughly (positive, near_zero).
-    # To get a "forward" vector pointing "up" (-Y direction), we need to rotate (dx_lr, dy_lr) 90 degrees clockwise.
     # A 90-degree clockwise rotation of (x, y) results in (y, -x) in image coordinates (Y-down).
-    # So, forward_dx = dy_lr, forward_dy = -dx_lr
     our_orientation_rad = math.atan2(-dx_lr, dy_lr) # Swapped dx and dy components and negated new dy (old dx)
 
     # Combine bounding boxes
@@ -230,14 +255,12 @@ while True:
 
   # ---------------------------------
   # Detect other bot (Color-based contour)
-  # Tuned for the bluish-green bot in the provided image
+  # Uses dynamically loaded HSV values
   # ---------------------------------
   hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
-  lower_hsv = np.array([70, 100, 100])
-  upper_hsv = np.array([100, 255, 255])
-
-  mask = cv2.inRange(hsv, lower_hsv, upper_hsv)
+  # Use loaded HSV values
+  mask = cv2.inRange(hsv, opponent_lower_hsv, opponent_upper_hsv)
 
   kernel = np.ones((5, 5), np.uint8)
   mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
@@ -349,16 +372,16 @@ while True:
       )
 
     # ---------------------------------
-    # Autonomous Control Logging (FIXED LEFT/RIGHT LOGIC)
+    # Autonomous Control Logging
     # ---------------------------------
     current_time_log = time.time()
     if current_time_log - last_log_time >= LOG_INTERVAL_SECONDS:
         direction = ""
         if abs(relative_angle_deg) <= FORWARD_ANGLE_MARGIN_DEG:
             direction = "FORWARD"
-        elif relative_angle_deg < -FORWARD_ANGLE_MARGIN_DEG: # Target is to our LEFT (negative angle in this system)
+        elif relative_angle_deg < -FORWARD_ANGLE_MARGIN_DEG: # Target is to our LEFT (negative angle)
             direction = "LEFT"
-        else: # relative_angle_deg > FORWARD_ANGLE_MARGIN_DEG (Target is to our RIGHT (positive angle in this system))
+        else: # relative_angle_deg > FORWARD_ANGLE_MARGIN_DEG (Target is to our RIGHT (positive angle))
             direction = "RIGHT"
 
         print(f"[{time.strftime('%H:%M:%S')}] Autonomous Command: {direction} (Rel A: {relative_angle_deg:.1f}°, D: {distance_px:.0f}px)")
