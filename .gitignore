@@ -1,5 +1,8 @@
 /calibration_images
 /calibration_images_*
 /.vscode
+/video_output
+/video_input
+
 
 opponent_color_calibration.npz

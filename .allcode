@@ -1,0 +1,84 @@
+{
+  "_info": "For information about this file, see: https://github.com/DrSiemer/CodeMerger/",
+  "project_name": "robo-vision",
+  "project_color": "#5aa34f",
+  "project_font_color": "light",
+  "active_profile": "Default",
+  "profiles": {
+    "Default": {
+      "selected_files": [
+        {
+          "path": "calibrate_camera.py",
+          "mtime": 1772019262.0769794,
+          "hash": "e917cba48caddc8391f9f721e7d5dc663db66a98",
+          "tokens": 1337,
+          "lines": 119
+        },
+        {
+          "path": "calibrate_color.py",
+          "mtime": 1772464598.048645,
+          "hash": "32e2ef5a465a9d56b828e4ec22b7488bce65f49e",
+          "tokens": 1911,
+          "lines": 164
+        },
+        {
+          "path": "go.bat",
+          "mtime": 1772460216.8614616,
+          "hash": "7aed0b4ac6ee060d2aedbb2014ac9ba63a56e7cf",
+          "tokens": 45,
+          "lines": 9
+        },
+        {
+          "path": "installed-packages.md",
+          "mtime": 1772009891.3149972,
+          "hash": "2cadc4e32670c22f052283098d4cb326050edd00",
+          "tokens": 18,
+          "lines": 5
+        },
+        {
+          "path": "main.py",
+          "mtime": 1772465257.010479,
+          "hash": "5cdaac0b857b0c8c2f452d53d1e354d7721d091a",
+          "tokens": 7335,
+          "lines": 675
+        },
+        {
+          "path": "README.md",
+          "mtime": 1771948665.4441755,
+          "hash": "27cc0bdc689f25403e9d4e3ebd4ddcc7f59e201b",
+          "tokens": 2174,
+          "lines": 121
+        },
+        {
+          "path": "robot_controller.py",
+          "mtime": 1772009799.585649,
+          "hash": "c0709357d17d20bc1c715742ddf8aadaaa345098",
+          "tokens": 1177,
+          "lines": 113
+        },
+        {
+          "path": "todo.md",
+          "mtime": 1773220833.690637,
+          "hash": "af317c0b6ff2e2493f0a359f6f27bd443f24b48c",
+          "tokens": 217,
+          "lines": 25
+        }
+      ],
+      "total_tokens": 14214,
+      "intro_text": "",
+      "outro_text": "",
+      "expanded_dirs": [],
+      "unknown_files": []
+    }
+  },
+  "known_files": [
+    "README.md",
+    "calibrate_camera.py",
+    "calibrate_color.py",
+    "go.bat",
+    "installed-packages.md",
+    "main.py",
+    "robot_controller.py",
+    "todo.md"
+  ]
+}
