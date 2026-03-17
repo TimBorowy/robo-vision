@@ -3,6 +3,7 @@
 /.vscode
 /video_output
 /video_input
+/__pycache__
 
 
 opponent_color_calibration.npz

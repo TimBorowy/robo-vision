@@ -1,3 +1,4 @@
+# robot_controller.py
 import serial
 import struct
 import time
@@ -5,55 +6,56 @@ import time
 class RobotController:
     """
     Handles serial communication with the ELRS TX module to send RC commands.
+    Encapsulates all RC-related configuration values.
     """
-    def __init__(self, serial_port, baudrate,
-                 channel_throttle, channel_steering, channel_mode_switch, channel_kill_switch,
-                 rc_min, rc_center, rc_max,
-                 autonomous_speed_forward, autonomous_speed_stop,
-                 autonomous_turn_left, autonomous_turn_right, autonomous_turn_straight,
-                 enable_comms=True):
+    # --- RC Channel Mapping ---
+    CHANNEL_THROTTLE = 0   # Corresponds to Channel 1 on your radio
+    CHANNEL_STEERING = 1   # Corresponds to Channel 2
+    CHANNEL_MODE_SWITCH = 4 # Corresponds to Channel 5 (Aux1) - for Manual/Autonomous
+    CHANNEL_KILL_SWITCH = 7 # Corresponds to Channel 8 (Aux4) - for Emergency Stop
 
-        self.serial_port = serial_port
-        self.baudrate = baudrate
+    # --- Default RC Values (1000-2000 PWM range) ---
+    RC_MIN = 1000
+    RC_CENTER = 1500
+    RC_MAX = 2000
+
+    # --- Autonomous Control Parameters ---
+    AUTONOMOUS_SPEED_FORWARD = 1600 # Example forward speed
+    AUTONOMOUS_SPEED_STOP = 1500    # Stop speed
+    AUTONOMOUS_TURN_LEFT = 1200     # Example left turn value (turn left)
+    AUTONOMOUS_TURN_RIGHT = 1800    # Example right turn value (turn right)
+    AUTONOMOUS_TURN_STRAIGHT = 1500 # Straight steering
+
+    # --- ELRS Serial Port Configuration ---
+    # ELRS_BAUDRATE is a fixed standard, so it can remain a class attribute.
+
+    ELRS_BAUDRATE = 420000 # Standard ELRS serial baudrate
+
+    def __init__(self, serial_port, enable_comms=True): # ELRS_SERIAL_PORT now passed here
+        self.serial_port = serial_port # Store as instance attribute
         self.enable_comms = enable_comms
         self.ser = None # Serial port object
-
-        self.CHANNEL_THROTTLE = channel_throttle
-        self.CHANNEL_STEERING = channel_steering
-        self.CHANNEL_MODE_SWITCH = channel_mode_switch
-        self.CHANNEL_KILL_SWITCH = channel_kill_switch
-
-        self.RC_MIN = rc_min
-        self.RC_CENTER = rc_center
-        self.RC_MAX = rc_max
-
-        self.AUTONOMOUS_SPEED_FORWARD = autonomous_speed_forward
-        self.AUTONOMOUS_SPEED_STOP = autonomous_speed_stop
-        self.AUTONOMOUS_TURN_LEFT = autonomous_turn_left
-        self.AUTONOMOUS_TURN_RIGHT = autonomous_turn_right
-        self.AUTONOMOUS_TURN_STRAIGHT = autonomous_turn_straight
 
         if self.enable_comms:
             self._init_serial_elrs()
         else:
-            print("Serial communication for robot control is DISABLED by configuration.")
+            print("RobotController: Serial communication for robot control is DISABLED by configuration.")
 
     def _init_serial_elrs(self):
         """Initializes the serial connection to the ELRS TX module."""
         if self.ser is not None and self.ser.is_open:
             self.ser.close() # Close existing connection if any
         try:
-            self.ser = serial.Serial(self.serial_port, self.baudrate, timeout=0.05)
-            print(f"RobotController: Connected to ELRS module on {self.serial_port} at {self.baudrate} baud.")
+            self.ser = serial.Serial(self.serial_port, self.ELRS_BAUDRATE, timeout=0.05)
+            print(f"RobotController: Connected to ELRS module on {self.serial_port} at {self.ELRS_BAUDRATE} baud.")
         except serial.SerialException as e:
             print(f"RobotController: Error connecting to ELRS module on {self.serial_port}: {e}")
             print("RobotController: Please ensure the Radiomaster MT-12 is connected, configured for USB Serial (CRSF),")
-            print("RobotController: and that the correct COM port is specified in ELRS_SERIAL_PORT.")
+            print(f"RobotController: and that the correct COM port ({self.serial_port}) is specified in main.py.")
             self.ser = None
 
     def _map_pwm_to_crsf(self, pwm_val):
         """Maps a 1000-2000 PWM value to an 11-bit CRSF value (0-2048)."""
-        # 1000 -> 0, 1500 -> 992, 2000 -> 2048 (approximate)
         return int((pwm_val - self.RC_MIN) * 2.048)
 
     def send_commands(self, throttle, steering, mode_switch, kill_switch, num_channels=16):
@@ -78,7 +80,6 @@ class RobotController:
         channels_crsf[self.CHANNEL_MODE_SWITCH] = self._map_pwm_to_crsf(mode_switch)
         channels_crsf[self.CHANNEL_KILL_SWITCH] = self._map_pwm_to_crsf(kill_switch)
         
-        # Ensure CRSF channel values are within valid 0-2047 range
         channels_crsf = [max(0, min(2047, ch)) for ch in channels_crsf]
 
         payload = b''
@@ -110,4 +111,4 @@ class RobotController:
         if self.ser is not None and self.ser.is_open:
             self.ser.close()
             print("RobotController: ELRS module serial port closed.")
-        self.ser = None # Ensure it's marked as closed
+        self.ser = None
