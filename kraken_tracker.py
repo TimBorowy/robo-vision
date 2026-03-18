@@ -1,15 +1,14 @@
 # kraken_tracker.py
+# (Only the update method needs changing, but here is the whole file context)
 import cv2
 import numpy as np
 import math
 import time
 
 class KrakenTracker:
-    """
-    Tracks our robot ("Kraken") using ArUco markers for orientation and redundant position,
-    and optionally HSV color for high-speed position.
-    """
-    def __init__(self, aruco_dict_type, aruco_marker_size_mm, our_bot_aruco_ids,
+    # ... __init__ stays exactly the same ...
+    def __init__(self, aruco_dict_type, aruco_marker_size_mm,
+                 left_marker_id, right_marker_id,
                  our_bot_color_lower_hsv, our_bot_color_upper_hsv,
                  camera_matrix, dist_coeffs, smoothing_alpha,
                  enable_color_tracking=True, min_contour_area=500):
@@ -19,19 +18,20 @@ class KrakenTracker:
             cv2.aruco.DetectorParameters()
         )
         self.aruco_marker_size_mm = aruco_marker_size_mm
-        self.our_bot_aruco_ids = our_bot_aruco_ids
+        self.left_marker_id = left_marker_id
+        self.right_marker_id = right_marker_id
+        self.our_bot_aruco_ids =[left_marker_id, right_marker_id]
         
         self.our_bot_color_lower_hsv = our_bot_color_lower_hsv
         self.our_bot_color_upper_hsv = our_bot_color_upper_hsv
         self.enable_color_tracking = enable_color_tracking
-        self.min_contour_area = min_contour_area # Used for color tracking
+        self.min_contour_area = min_contour_area
         
         self.camera_matrix = camera_matrix
         self.dist_coeffs = dist_coeffs
         self.smoothing_alpha = smoothing_alpha
 
-        # Store individual marker data for drawing
-        self._individual_marker_draw_data = [] # List of {'center_fwd', 'end_fwd', 'bbox'}
+        self._individual_marker_draw_data =[] 
 
         self.current_center = None
         self.current_orientation_rad = None
@@ -42,25 +42,24 @@ class KrakenTracker:
 
         print(f"KrakenTracker: Initialized with ArUco dict type {aruco_dict_type}.")
 
-    def update(self, frame, hsv_frame, gray_frame):
+    def update(self, frame, hsv_frame, gray_frame, arena_mask=None): # <<< ADDED arena_mask
         """
         Updates Kraken's position and orientation based on ArUco and/or color detection.
         Returns (smoothed_center, smoothed_orientation_rad, current_bbox_combined)
         """
         our_aruco_center = None
         our_aruco_orientation_rad = None
-        our_aruco_bbox = None # Bbox encompassing all detected ArUco markers
+        our_aruco_bbox = None
 
-        marker_right_data = {'center': None, 'orientation_rad': None, 'bbox': None} # ID 102 (Right)
-        marker_left_data = {'center': None, 'orientation_rad': None, 'bbox': None} # ID 101 (Left)
+        marker_right_data = {'center': None, 'orientation_rad': None, 'bbox': None}
+        marker_left_data = {'center': None, 'orientation_rad': None, 'bbox': None}
         
-        self._individual_marker_draw_data = [] # Reset draw data for this frame
+        self._individual_marker_draw_data =[]
 
         # 1. ArUco Detection
         corners, ids, rejected = self.aruco_detector.detectMarkers(gray_frame)
         
         if ids is not None and self.camera_matrix is not None:
-            # print(f"KrakenTracker: Detected ArUco IDs: {ids.flatten()}") # Debug print
             for i, marker_id in enumerate(ids):
                 if marker_id in self.our_bot_aruco_ids:
                     pts = corners[i][0]
@@ -70,39 +69,46 @@ class KrakenTracker:
                     current_bbox = (x_min, y_min, x_max, y_max)
                     current_center = (int(pts[:, 0].mean()), int(pts[:, 1].mean()))
 
-                    rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
-                        [corners[i]], self.aruco_marker_size_mm, self.camera_matrix, self.dist_coeffs
-                    )
+                    rvecs, tvecs, _ = cv2.aruco.estimatePoseSingleMarkers([corners[i]], self.aruco_marker_size_mm, self.camera_matrix, self.dist_coeffs)
 
                     current_orientation_rad = None
                     if rvecs is not None and len(rvecs) > 0:
                         rvec = rvecs[0][0]
                         tvec = tvecs[0][0]
 
-                        # Project a forward vector for the marker itself
-                        object_points = np.array([[0, 0, 0], [0, self.aruco_marker_size_mm / 2, 0]], dtype=np.float32).reshape(-1, 1, 3)
+                        object_points = np.array([[0, 0, 0],[0, self.aruco_marker_size_mm / 2, 0]], dtype=np.float32).reshape(-1, 1, 3)
                         img_pts, _ = cv2.projectPoints(object_points, rvec, tvec, self.camera_matrix, self.dist_coeffs)
 
-                        p_center_fwd = tuple(img_pts[0][0].astype(int))
-                        p_forward_end = tuple(img_pts[1][0].astype(int))
+                        pt1_flat = img_pts[0].ravel()
+                        pt2_flat = img_pts[1].ravel()
                         
-                        # Store for drawing later
-                        self._individual_marker_draw_data.append({
-                            'center_fwd': p_center_fwd,
-                            'end_fwd': p_forward_end,
-                            'bbox': current_bbox
-                        })
+                        try:
+                            x1, y1 = float(pt1_flat[0]), float(pt1_flat[1])
+                            x2, y2 = float(pt2_flat[0]), float(pt2_flat[1])
 
-                        dx_forward = img_pts[1][0,0] - img_pts[0][0,0]
-                        dy_forward = img_pts[1][0,1] - img_pts[0][0,1]
-                        current_orientation_rad = math.atan2(dy_forward, dx_forward)
+                            if not (math.isnan(x1) or math.isnan(y1) or math.isnan(x2) or math.isnan(y2)):
+                                if abs(x1) < 16384 and abs(y1) < 16384 and abs(x2) < 16384 and abs(y2) < 16384:
+                                    
+                                    p_center_fwd = (int(round(x1)), int(round(y1)))
+                                    p_forward_end = (int(round(x2)), int(round(y2)))
+                                    
+                                    self._individual_marker_draw_data.append({
+                                        'center_fwd': p_center_fwd,
+                                        'end_fwd': p_forward_end,
+                                        'bbox': current_bbox,
+                                        'id': marker_id 
+                                    })
+
+                                    dx_forward = x2 - x1
+                                    dy_forward = y2 - y1
+                                    current_orientation_rad = math.atan2(dy_forward, dx_forward)
+                        except (ValueError, TypeError, OverflowError):
+                            pass
                     
-                    if marker_id == 102: # Right marker
+                    if marker_id == self.right_marker_id:
                         marker_right_data = {'center': current_center, 'orientation_rad': current_orientation_rad, 'bbox': current_bbox}
-                    elif marker_id == 101: # Left marker
+                    elif marker_id == self.left_marker_id:
                         marker_left_data = {'center': current_center, 'orientation_rad': current_orientation_rad, 'bbox': current_bbox}
-        # else:
-            # print("KrakenTracker: No ArUco IDs detected for our bot.") # Debug print
 
         # Combine ArUco data for overall bot pose
         if marker_right_data['center'] is not None and marker_left_data['center'] is not None:
@@ -112,7 +118,7 @@ class KrakenTracker:
             )
             dx_lr = marker_right_data['center'][0] - marker_left_data['center'][0]
             dy_lr = marker_right_data['center'][1] - marker_left_data['center'][1]
-            our_aruco_orientation_rad = math.atan2(-dx_lr, dy_lr) # 90-deg CW from left-to-right vector
+            our_aruco_orientation_rad = math.atan2(-dx_lr, dy_lr)
             
             min_x = min(marker_right_data['bbox'][0], marker_left_data['bbox'][0])
             min_y = min(marker_right_data['bbox'][1], marker_left_data['bbox'][1])
@@ -128,11 +134,16 @@ class KrakenTracker:
             our_aruco_orientation_rad = marker_left_data['orientation_rad']
             our_aruco_bbox = marker_left_data['bbox']
 
-        # 2. Our Bot Color Tracking (for redundant position)
+        # 2. Our Bot Color Tracking
         our_color_center = None
         our_color_bbox = None
         if self.enable_color_tracking:
             our_bot_mask = cv2.inRange(hsv_frame, self.our_bot_color_lower_hsv, self.our_bot_color_upper_hsv)
+            
+            # <<< NEW: Apply arena mask to our bot's color tracking as well
+            if arena_mask is not None:
+                our_bot_mask = cv2.bitwise_and(our_bot_mask, our_bot_mask, mask=arena_mask)
+
             kernel_color = np.ones((5, 5), np.uint8)
             our_bot_mask = cv2.morphologyEx(our_bot_mask, cv2.MORPH_CLOSE, kernel_color)
             our_bot_mask = cv2.morphologyEx(our_bot_mask, cv2.MORPH_OPEN, kernel_color)
@@ -155,17 +166,16 @@ class KrakenTracker:
         # 3. Combine Position & Orientation (Current Frame)
         self.current_center = None
         self.current_orientation_rad = None
-        self.current_bbox_combined = None # This will be the bbox for the green smoothed box
+        self.current_bbox_combined = None
 
         if our_color_center is not None:
-            self.current_center = our_color_center # Prioritize color for position if found
+            self.current_center = our_color_center
             self.current_bbox_combined = our_color_bbox
         elif our_aruco_center is not None:
-            self.current_center = our_aruco_center # Fallback to ArUco for position
+            self.current_center = our_aruco_center 
             self.current_bbox_combined = our_aruco_bbox
         
-        # Orientation *always* comes from ArUco (color blobs don't give orientation)
-        self.current_orientation_rad = our_aruco_orientation_rad # Will be None if no ArUco detected
+        self.current_orientation_rad = our_aruco_orientation_rad
 
         # 4. Apply Smoothing
         self.smoothed_center = self._smooth(self.smoothed_center, np.array(self.current_center), self.smoothing_alpha) if self.current_center is not None else self.smoothed_center
@@ -182,14 +192,17 @@ class KrakenTracker:
         return (self.smoothed_center, self.smoothed_orientation_rad, self.current_bbox_combined)
 
     def draw(self, display_frame):
-        """Draws our robot's elements on the display frame."""
-        # Draw individual ArUco markers and their forward lines
+        # ... drawing method stays completely the same ...
         for marker_data in self._individual_marker_draw_data:
             x_min, y_min, x_max, y_max = marker_data['bbox']
             cv2.rectangle(display_frame, (x_min, y_min), (x_max, y_max), (162, 0, 255), 2) # Purple box
-            cv2.line(display_frame, marker_data['center_fwd'], marker_data['end_fwd'], (0, 255, 255), 2) # Yellow line
+            cv2.putText(display_frame, f"ID: {marker_data['id']}", (x_min, y_min - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (162, 0, 255), 1)
+            
+            try:
+                cv2.line(display_frame, marker_data['center_fwd'], marker_data['end_fwd'], (0, 255, 255), 2)
+            except Exception:
+                pass
 
-        # Draw smoothed combined bounding box for our bot (using Pink)
         if self.smoothed_center is not None and self.current_bbox_combined is not None:
             bbox_width = self.current_bbox_combined[2] - self.current_bbox_combined[0]
             bbox_height = self.current_bbox_combined[3] - self.current_bbox_combined[1]
@@ -199,13 +212,17 @@ class KrakenTracker:
             smooth_y_max = int(self.smoothed_center[1] + bbox_height / 2)
             cv2.rectangle(display_frame, (smooth_x_min, smooth_y_min), (smooth_x_max, smooth_y_max), (200, 60, 225), 2) # Pink box
 
-            # Draw the smoothed orientation line (from smoothed center)
             if self.smoothed_orientation_rad is not None:
-                line_length = 50 # pixels
-                end_x = int(self.smoothed_center[0] + line_length * math.cos(self.smoothed_orientation_rad))
-                end_y = int(self.smoothed_center[1] + line_length * math.sin(self.smoothed_orientation_rad))
-                cv2.line(display_frame, tuple(self.smoothed_center.astype(int)), (end_x, end_y), (0, 255, 0), 2) # Green line for overall bot heading
-
+                line_length = 50 
+                try:
+                    end_x = int(round(float(self.smoothed_center[0] + line_length * math.cos(self.smoothed_orientation_rad))))
+                    end_y = int(round(float(self.smoothed_center[1] + line_length * math.sin(self.smoothed_orientation_rad))))
+                    p_center = (int(round(float(self.smoothed_center[0]))), int(round(float(self.smoothed_center[1]))))
+                    
+                    if abs(end_x) < 16384 and abs(end_y) < 16384 and abs(p_center[0]) < 16384 and abs(p_center[1]) < 16384:
+                        cv2.line(display_frame, p_center, (end_x, end_y), (0, 255, 0), 2)
+                except Exception:
+                    pass
 
     def _smooth(self, old, new, alpha):
         if old is None:

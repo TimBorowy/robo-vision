@@ -17,7 +17,7 @@ from opponent_tracker import OpponentTracker
 
 # --- INPUT SOURCE CONFIGURATION ---
 USE_VIDEO_FILE_INPUT = True # <<< TOGGLE: True to use a video file, False for live camera
-VIDEO_INPUT_FILE = "video_input/kraken-vs-knackwurst-stream.mp4" # <<< Specify your recorded raw video file here
+VIDEO_INPUT_FILE = "video_input/kraken-vs-knackwurst-stream-720.mp4" # <<< Specify your recorded raw video file here
 
 CAMERA_INDEX = 1 # IMPORTANT: Set this to your external webcam index (only used if USE_VIDEO_FILE_INPUT is False)
 FRAME_WIDTH = 1280
@@ -29,10 +29,11 @@ MIN_CONTOUR_AREA = 500 # Minimum pixel area for a contour to be considered a bot
 SMOOTHING_ALPHA = 0.4 # Alpha for exponential moving average smoothing (0.0 - 1.0, higher means less smoothing)
 
 # --- OUR BOT (KRAKEN) CONFIGURATION ---
-# IMPORTANT: Confirm this is the EXACT dictionary you used to generate markers 101 and 102.
-# Common options: cv2.aruco.DICT_5X5_1000, cv2.aruco.DICT_6X6_250, cv2.aruco.DICT_6X6_1000, etc.
-OUR_BOT_ARUCO_DICT_TYPE = cv2.aruco.DICT_6X6_250 # <<< CHECK AND UPDATE THIS!
-OUR_BOT_ARUCO_IDS = [101, 102] # ID 101 is on the left side, ID 102 on the right side.
+# IMPORTANT: These IDs should be 101 for Left, 102 for Right based on your previous description
+LEFT_MARKER_ID = 101
+RIGHT_MARKER_ID = 102
+# OUR_BOT_ARUCO_IDS is now used internally by KrakenTracker, no need to define here anymore
+OUR_BOT_ARUCO_DICT_TYPE = cv2.aruco.DICT_4X4_250
 ARUCO_MARKER_SIZE_MM = 50 # IMPORTANT: The actual physical side length of your ArUco marker in millimeters
 
 ENABLE_OUR_BOT_COLOR_TRACKING = True # <<< TOGGLE: True to enable color tracking for our bot
@@ -52,10 +53,10 @@ OPPONENT_COLOR_UPPER_HSV = np.array([100, 255, 255])
 
 # --- ARENA & BACKGROUND SUBTRACTION ---
 # For now, default arena polygon is full frame.
-# You can define a custom polygon here: [(x1,y1), (x2,y2), ...]
-# Example: ARENA_POLYGON_POINTS = [(100,100), (FRAME_WIDTH-100, 100), (FRAME_WIDTH-100, FRAME_HEIGHT-100), (100, FRAME_HEIGHT-100)]
-ARENA_POLYGON_POINTS = [(500,100), (FRAME_WIDTH+100, 150), (1920, 1080-300), (1920, 1080), (0, 1080), (0, 1080-300)] # Set to None for full frame, or provide list of points
-BG_SUBTRACTOR_HISTORY = 500
+# You can define a custom polygon here:[(x1,y1), (x2,y2), ...]
+# Example: ARENA_POLYGON_POINTS =[(100,100), (FRAME_WIDTH-100, 100), (FRAME_WIDTH-100, FRAME_HEIGHT-100), (100, FRAME_HEIGHT-100)]
+ARENA_POLYGON_POINTS =[(340,60), (FRAME_WIDTH-370, 90), (FRAME_WIDTH, FRAME_HEIGHT-150), (FRAME_WIDTH, FRAME_HEIGHT), (0, FRAME_HEIGHT), (0, FRAME_HEIGHT-200)] # Set to None for full frame, or provide list of points
+BG_SUBTRACTOR_HISTORY = 300
 BG_SUBTRACTOR_VAR_THRESHOLD = 16
 BG_SUBTRACTOR_DETECT_SHADOWS = True
 
@@ -97,7 +98,7 @@ def load_camera_params(filename=CAMERA_CALIBRATION_FILE):
         print(f"Error: Camera calibration file '{filename}' not found.")
         print("Please run 'calibrate_camera.py' first to generate it.")
         print("ArUco pose estimation will be inaccurate without calibration!")
-        camera_matrix = np.array([[FRAME_WIDTH, 0, FRAME_WIDTH/2], [0, FRAME_WIDTH, FRAME_HEIGHT/2], [0, 0, 1]], dtype=np.float32)
+        camera_matrix = np.array([[FRAME_WIDTH, 0, FRAME_WIDTH/2],[0, FRAME_WIDTH, FRAME_HEIGHT/2], [0, 0, 1]], dtype=np.float32)
         dist_coeffs = np.zeros((4, 1), dtype=np.float32)
         return False
     try:
@@ -109,7 +110,7 @@ def load_camera_params(filename=CAMERA_CALIBRATION_FILE):
     except Exception as e:
         print(f"Error loading camera calibration: {e}")
         print("ArUco pose estimation will be inaccurate without calibration!")
-        camera_matrix = np.array([[FRAME_WIDTH, 0, FRAME_WIDTH/2], [0, FRAME_WIDTH, FRAME_HEIGHT/2], [0, 0, 1]], dtype=np.float32)
+        camera_matrix = np.array([[FRAME_WIDTH, 0, FRAME_WIDTH/2],[0, FRAME_WIDTH, FRAME_HEIGHT/2], [0, 0, 1]], dtype=np.float32)
         dist_coeffs = np.zeros((4, 1), dtype=np.float32)
         return False
 
@@ -195,18 +196,14 @@ def main():
         BG_SUBTRACTOR_HISTORY, BG_SUBTRACTOR_VAR_THRESHOLD, BG_SUBTRACTOR_DETECT_SHADOWS
     )
     if ARENA_POLYGON_POINTS:
-        # Scale arena points to match FRAME_WIDTH/HEIGHT if necessary (e.g., if input video is different resolution)
-        # Assuming ARENA_POLYGON_POINTS are defined for the target FRAME_WIDTH/HEIGHT
-        scaled_polygon = []
-        for x,y in ARENA_POLYGON_POINTS:
-            scaled_polygon.append( (int(x * (cap.get(cv2.CAP_PROP_FRAME_WIDTH) / FRAME_WIDTH)),
-                                    int(y * (cap.get(cv2.CAP_PROP_FRAME_HEIGHT) / FRAME_HEIGHT))) )
-        arena_tracker.set_arena_polygon(ARENA_POLYGON_POINTS) # Use the original ARENA_POLYGON_POINTS for now, assuming they match the frame dimensions.
-                                                              # If you define polygon points for 1280x720, but the video is 1920x1080,
-                                                              # you'll need to scale them. For simplicity, leaving original for now.
+        # Note: If using ARENA_POLYGON_POINTS with a video file, ensure the points are scaled
+        # correctly if the video's resolution is different from FRAME_WIDTH/HEIGHT.
+        # For simplicity, assuming FRAME_WIDTH/HEIGHT matches the video resolution for custom polygon.
+        arena_tracker.set_arena_polygon(ARENA_POLYGON_POINTS)
 
     kraken_tracker = KrakenTracker(
-        OUR_BOT_ARUCO_DICT_TYPE, ARUCO_MARKER_SIZE_MM, OUR_BOT_ARUCO_IDS,
+        OUR_BOT_ARUCO_DICT_TYPE, ARUCO_MARKER_SIZE_MM, 
+        LEFT_MARKER_ID, RIGHT_MARKER_ID, # Pass specific marker IDs
         OUR_BOT_COLOR_LOWER_HSV, OUR_BOT_COLOR_UPPER_HSV,
         camera_matrix, dist_coeffs, SMOOTHING_ALPHA,
         ENABLE_OUR_BOT_COLOR_TRACKING, MIN_CONTOUR_AREA
@@ -268,19 +265,22 @@ def main():
             display_frame = frame.copy()
             
             # Pre-process frame for different detectors
-            gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            gray_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)[:,:,2]
             hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
-            # 1. Update Kraken Tracker (our bot)
+            # <<< NEW: Fetch the arena mask from ArenaTracker so we can use it elsewhere
+            arena_mask = arena_tracker.get_arena_mask(frame.shape)
+
+            # 1. Update Kraken Tracker (our bot) - Pass arena_mask
             kraken_center_smoothed, kraken_orientation_smoothed_rad, kraken_bbox_current = \
-                kraken_tracker.update(frame, hsv_frame, gray_frame)
+                kraken_tracker.update(frame, hsv_frame, gray_frame, arena_mask)
 
             # 2. Update Arena Tracker (all other moving objects)
             all_moving_objects = arena_tracker.detect_moving_objects(frame, kraken_bbox_current, OUR_BOT_OVERLAP_THRESHOLD_PERCENT)
             
-            # 3. Update Opponent Tracker (the specific opponent we target)
+            # 3. Update Opponent Tracker (the specific opponent we target) - Pass arena_mask
             opponent_center_smoothed, opponent_bbox_current = \
-                opponent_tracker.update(frame, hsv_frame, all_moving_objects, kraken_center_smoothed)
+                opponent_tracker.update(frame, hsv_frame, all_moving_objects, kraken_center_smoothed, arena_mask)
             
             # ====================================================
             # Calculate and display Relative Angle + Distance
@@ -292,10 +292,14 @@ def main():
             current_kill_switch_rc = robot_controller.RC_MAX # Assume Kill Switch OFF
 
             if kraken_center_smoothed is not None and opponent_center_smoothed is not None and kraken_orientation_smoothed_rad is not None:
-                # Draw line between our bot and the other bot
-                p1_kraken = tuple(kraken_center_smoothed.astype(int))
-                p2_opponent = tuple(opponent_center_smoothed.astype(int))
-                cv2.line(display_frame, p1_kraken, p2_opponent, (0, 255, 255), 2) # Yellow line
+                try:
+                    p1_kraken = (int(round(float(kraken_center_smoothed[0]))), int(round(float(kraken_center_smoothed[1]))))
+                    p2_opponent = (int(round(float(opponent_center_smoothed[0]))), int(round(float(opponent_center_smoothed[1]))))
+                    
+                    if abs(p1_kraken[0]) < 16384 and abs(p1_kraken[1]) < 16384 and abs(p2_opponent[0]) < 16384 and abs(p2_opponent[1]) < 16384:
+                        cv2.line(display_frame, p1_kraken, p2_opponent, (0, 255, 255), 2) # Yellow line
+                except Exception:
+                    pass # Failsafe against drawing crashes
 
                 dx_target = opponent_center_smoothed[0] - kraken_center_smoothed[0]
                 dy_target = opponent_center_smoothed[1] - kraken_center_smoothed[1]

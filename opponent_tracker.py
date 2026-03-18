@@ -25,18 +25,23 @@ class OpponentTracker:
         else:
             print("OpponentTracker: Targeting closest moving object.")
 
-    def update(self, frame, hsv_frame, all_moving_objects, kraken_center_smoothed):
+    def update(self, frame, hsv_frame, all_moving_objects, kraken_center_smoothed, arena_mask=None):
         """
         Identifies the opponent bot.
         `all_moving_objects` is a list of {'center': (x,y), 'bbox': (x1,y1,x2,y2), 'area': area}
         from ArenaTracker.
         Returns (smoothed_center, current_bbox)
         """
-        potential_opponents = []
+        potential_opponents =[]
         
         if self.enable_hsv_tracking and self.hsv_lower is not None and self.hsv_upper is not None:
             # Filter objects by HSV color first
             opponent_mask = cv2.inRange(hsv_frame, self.hsv_lower, self.hsv_upper)
+            
+            # Apply arena mask so we ignore color matches outside the arena
+            if arena_mask is not None:
+                opponent_mask = cv2.bitwise_and(opponent_mask, opponent_mask, mask=arena_mask)
+
             kernel_color = np.ones((5, 5), np.uint8)
             opponent_mask = cv2.morphologyEx(opponent_mask, cv2.MORPH_CLOSE, kernel_color)
             opponent_mask = cv2.morphologyEx(opponent_mask, cv2.MORPH_OPEN, kernel_color)
@@ -96,8 +101,8 @@ class OpponentTracker:
     def draw(self, display_frame):
         """Draws the opponent bot's elements on the display frame."""
         if self.current_bbox is not None: # Draw blue box around current detected opponent
-            x, y, w, h = self.current_bbox
-            cv2.rectangle(display_frame, (x, y), (x + w, y + h), (0, 0, 255), 2) # Blue box for opponent
+            x1, y1, x2, y2 = self.current_bbox
+            cv2.rectangle(display_frame, (x1, y1), (x2, y2), (0, 0, 255), 2) # Blue box for opponent
 
     def _smooth(self, old, new, alpha):
         if old is None:

@@ -27,19 +27,30 @@ class ArenaTracker:
         ], dtype=np.int32)
         print("ArenaTracker: Default arena polygon set to full frame.")
 
-        self.moving_objects = [] # Stores (center, bbox) for all detected moving objects
+        self.moving_objects =[] # Stores (center, bbox) for all detected moving objects
+        self.cached_arena_mask = None # Cache for the mask
 
     def set_arena_polygon(self, polygon_points):
         """
         Sets the arena polygon. `polygon_points` should be a list of (x, y) tuples.
-        Example: [(100,100), (FRAME_WIDTH-100, 100), (FRAME_WIDTH-100, FRAME_HEIGHT-100), (100, FRAME_HEIGHT-100)]
+        Example:[(100,100), (FRAME_WIDTH-100, 100), (FRAME_WIDTH-100, FRAME_HEIGHT-100), (100, FRAME_HEIGHT-100)]
         """
         if len(polygon_points) < 3:
             print("ArenaTracker: Warning: Polygon must have at least 3 points. Using default full frame.")
             return
 
         self.arena_polygon = np.array([[[p[0], p[1]]] for p in polygon_points], dtype=np.int32)
+        self.cached_arena_mask = None # Invalidate the cache if the polygon changes
         print(f"ArenaTracker: Arena polygon updated to {polygon_points}.")
+
+    def get_arena_mask(self, frame_shape):
+        """
+        Generates (or returns cached) binary mask of the arena area.
+        """
+        if self.cached_arena_mask is None or self.cached_arena_mask.shape != frame_shape[:2]:
+            self.cached_arena_mask = np.zeros(frame_shape[:2], dtype=np.uint8)
+            cv2.fillPoly(self.cached_arena_mask,[self.arena_polygon], 255)
+        return self.cached_arena_mask
 
     def detect_moving_objects(self, frame, our_bot_bbox_combined=None, our_bot_overlap_threshold=0.5):
         """
@@ -53,13 +64,12 @@ class ArenaTracker:
         fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, kernel_fg)
 
         # Apply arena mask to fg_mask
-        arena_mask = np.zeros(frame.shape[:2], dtype=np.uint8)
-        cv2.fillPoly(arena_mask, [self.arena_polygon], 255)
+        arena_mask = self.get_arena_mask(frame.shape)
         fg_mask = cv2.bitwise_and(fg_mask, fg_mask, mask=arena_mask)
 
         contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         
-        self.moving_objects = []
+        self.moving_objects =[]
         for cnt in contours:
             area = cv2.contourArea(cnt)
             if area < self.min_contour_area:
@@ -96,13 +106,11 @@ class ArenaTracker:
                         is_overlap_with_our_bot = True
 
             if is_overlap_with_our_bot:
-                # Uncomment for debugging filtered-out objects
-                # cv2.rectangle(frame, (x_cnt, y_cnt), (x_cnt + w_cnt, y_cnt + h_cnt), (0, 0, 255), 1) # Red for filtered
                 continue 
             
             self.moving_objects.append({'center': cxcy, 'bbox': current_bbox, 'area': area})
         
-        # Sort by area descending to prioritize larger objects (e.g., actual robots over small debris)
+        # Sort by area descending to prioritize larger objects
         self.moving_objects.sort(key=lambda x: x['area'], reverse=True)
         return self.moving_objects
 
@@ -113,9 +121,9 @@ class ArenaTracker:
     def draw_moving_objects(self, display_frame):
         """Draws white squares around all detected moving objects."""
         for obj in self.moving_objects:
-            x, y, w, h = obj['bbox']
+            x1, y1, x2, y2 = obj['bbox']
             # White color (BGR: B=255, G=255, R=255)
-            cv2.rectangle(display_frame, (x, y), (x + w, y + h), (255, 255, 255), 2) # White box
+            cv2.rectangle(display_frame, (x1, y1), (x2, y2), (255, 255, 255), 2) # White box
 
     def contour_center(self, contour):
         M = cv2.moments(contour)
@@ -123,5 +131,4 @@ class ArenaTracker:
             return None
         cx = int(M["m10"] / M["m00"])
         cy = int(M["m01"] / M["m00"])
-        return (cx, cy)
         return (cx, cy)
