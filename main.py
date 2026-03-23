@@ -1,8 +1,12 @@
 # main.py
-import cv2
+import cv2 # Import CV2 FIRST to stabilize the namespace
 import numpy as np
 import os
 import time
+
+# Pre-capture original imshow before Ultralytics might patch it
+_orig_imshow = cv2.imshow
+
 from arena_tracker import ArenaTracker
 from kraken_tracker import KrakenTracker
 from opponent_tracker import OpponentTracker
@@ -12,22 +16,21 @@ from opponent_tracker import OpponentTracker
 # ==============================
 
 # --- INPUT SOURCE ---
-USE_VIDEO_FILE = False
+USE_VIDEO_FILE = True
 VIDEO_PATH = "video_input/kraken-vs-knackwurst-stream-720.mp4"
 CAMERA_INDEX = 1
 FRAME_WIDTH = 1280
 FRAME_HEIGHT = 720
 
 # --- KRAKEN (OUR BOT) ---
-# Tag IDs for Top and Bottom faces
-KRAKEN_TAGS_TOP = [101, 102]      # 101: Left, 102: Right
-KRAKEN_TAGS_BOTTOM = [103, 104]   # 103: Left, 104: Right
+KRAKEN_TAGS_TOP = [101, 102]
+KRAKEN_TAGS_BOTTOM = [103, 104]
 TAG_SIZE_MM = 50
 
 # --- TRACKING ---
 ARENA_POINTS = [(340,60), (FRAME_WIDTH-370, 90), (FRAME_WIDTH, FRAME_HEIGHT-150), (FRAME_WIDTH, FRAME_HEIGHT), (0, FRAME_HEIGHT), (0, FRAME_HEIGHT-200)]
-YOLO_MODEL_PATH = "yolov8n.pt" # Update to 'robot_model.pt' after training
-YOLO_CONFIDENCE = 0.4
+YOLO_MODEL_PATH = "robot_model.pt"
+YOLO_CONFIDENCE = 0.5
 SMOOTHING_ALPHA = 0.4
 
 CAMERA_CALIB_FILE = "camera_calibration.npz"
@@ -42,10 +45,10 @@ def load_camera_params():
 def main():
     mtx, dist = load_camera_params()
 
-    # Using CAP_DSHOW for fast initialization on Windows
     if USE_VIDEO_FILE:
         cap = cv2.VideoCapture(VIDEO_PATH)
     else:
+        # Using CAP_DSHOW for fast initialization on Windows
         cap = cv2.VideoCapture(CAMERA_INDEX, cv2.CAP_DSHOW)
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, FRAME_WIDTH)
         cap.set(cv2.CAP_PROP_FRAME_HEIGHT, FRAME_HEIGHT)
@@ -54,7 +57,6 @@ def main():
     arena = ArenaTracker(FRAME_WIDTH, FRAME_HEIGHT)
     arena.set_arena_polygon(ARENA_POINTS)
 
-    # Initialize KrakenTracker with new ID lists
     kraken = KrakenTracker(
         mtx, dist,
         tags_top=KRAKEN_TAGS_TOP,
@@ -67,6 +69,10 @@ def main():
 
     print("Phase 2 Vision System Active. Press ESC to quit.")
 
+    # FPS smoothing variables
+    prev_time = time.time()
+    fps_avg = 0
+
     while True:
         ret, frame = cap.read()
         if not ret: break
@@ -78,7 +84,7 @@ def main():
         masked_frame = cv2.bitwise_and(frame, frame, mask=mask)
         gray = cv2.cvtColor(masked_frame, cv2.COLOR_BGR2GRAY)
 
-        # 2. Track Kraken (Handles 4 tags + Inverted states)
+        # 2. Track Kraken
         k_center, k_head, k_bbox, is_inverted = kraken.update(gray)
 
         # 3. Track Opponent
@@ -99,10 +105,15 @@ def main():
         if k_center is not None and o_center is not None:
             cv2.line(display_frame, tuple(k_center.astype(int)), tuple(o_center.astype(int)), (0, 255, 255), 2)
 
-        fps = 1.0 / (time.time() - start_time)
-        cv2.putText(display_frame, f"FPS: {fps:.1f}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+        # Calculate Smooth FPS
+        curr_time = time.time()
+        fps = 1.0 / (curr_time - prev_time)
+        prev_time = curr_time
+        fps_avg = (fps_avg * 0.9) + (fps * 0.1)
+        cv2.putText(display_frame, f"FPS: {fps_avg:.1f}", (20, 40), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
-        cv2.imshow("Phase 2 - AI Tracking", display_frame)
+        # Using the original imshow to bypass Ultralytics patches
+        _orig_imshow("Phase 2 - AI Tracking", display_frame)
         if cv2.waitKey(1) == 27: break
 
     cap.release()
