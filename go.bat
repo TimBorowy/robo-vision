@@ -1,8 +1,7 @@
 @echo off
-if "%1"=="color" (
-  python calibrate_color.py
-) else if "%1"=="x" (
-  python calibrate_camera.py
+if "%1"=="train" (
+  echo Starting YOLOv8 Training Routine...
+  python train_yolo.py
 ) else (
   python main.py
 )
