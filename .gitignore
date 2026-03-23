@@ -10,3 +10,4 @@ opponent_color_calibration.npz
 
 /yolo-training-data
 /runs
+*.pt
