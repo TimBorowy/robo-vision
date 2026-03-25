@@ -8,7 +8,7 @@ def main():
     # Start training
     # We specify device=0 to use your 3060 Ti
     model.train(
-        data='./yolo-training-data/data.yaml', 
+        data='./robot-detection-dataset-v2/data.yaml', 
         epochs=100, 
         imgsz=640, 
         device=0,

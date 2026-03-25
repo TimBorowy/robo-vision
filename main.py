@@ -17,7 +17,10 @@ from opponent_tracker import OpponentTracker
 
 # --- INPUT SOURCE ---
 USE_VIDEO_FILE = True
-VIDEO_PATH = "video_input/kraken-vs-knackwurst-stream-720.mp4"
+VIDEO_PATH = "video_input/Training images/nhrl-usawgi/usawgi-madgasher-720p.mp4"
+# VIDEO_PATH = "video_input/kraken-vs-knackwurst-stream-720.mp4"
+# VIDEO_PATH = "video_input/Training images/nhrl-the-wall/the-wall-720p.mp4"
+# VIDEO_PATH = "video_input/Training images/nhrl-stingoperation/whosearl-stingoperation-720p.mp4"
 CAMERA_INDEX = 1
 FRAME_WIDTH = 1280
 FRAME_HEIGHT = 720
@@ -28,8 +31,11 @@ KRAKEN_TAGS_BOTTOM = [103, 104]
 TAG_SIZE_MM = 50
 
 # --- TRACKING ---
-ARENA_POINTS = [(340,60), (FRAME_WIDTH-370, 90), (FRAME_WIDTH, FRAME_HEIGHT-150), (FRAME_WIDTH, FRAME_HEIGHT), (0, FRAME_HEIGHT), (0, FRAME_HEIGHT-200)]
-YOLO_MODEL_PATH = "robot_model.pt"
+# Bogbots arena
+# ARENA_POINTS = [(340,60), (FRAME_WIDTH-370, 90), (FRAME_WIDTH, FRAME_HEIGHT-150), (FRAME_WIDTH, FRAME_HEIGHT), (0, FRAME_HEIGHT), (0, FRAME_HEIGHT-200)]
+# NHRL cage 2
+ARENA_POINTS = [(350,40), (FRAME_WIDTH-320, 30), (FRAME_WIDTH, FRAME_HEIGHT-150), (FRAME_WIDTH, FRAME_HEIGHT), (0, FRAME_HEIGHT), (0, FRAME_HEIGHT-150)]
+YOLO_MODEL_PATH = "robot_modelv2.pt"
 YOLO_CONFIDENCE = 0.5
 SMOOTHING_ALPHA = 0.4
 

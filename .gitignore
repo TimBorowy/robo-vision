@@ -1,13 +1,19 @@
-/calibration_images
-/calibration_images_*
+# General stuff
 /.vscode
-/video_output
-/video_input
 /__pycache__
 
-
+# Calibration stuff
+/calibration_images
+/calibration_images_*
 opponent_color_calibration.npz
 
-/yolo-training-data
+# Training data
+/video_output/*
+!/video_output/.gitkeep
+/video_input/*
+!/video_input/.gitkeep
+/robot-detection-dataset-*
+
+# Models
 /runs
 *.pt
