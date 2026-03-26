@@ -17,11 +17,12 @@ from opponent_tracker import OpponentTracker
 
 # --- INPUT SOURCE ---
 USE_VIDEO_FILE = True
-VIDEO_PATH = "video_input/Training images/nhrl-usawgi/usawgi-madgasher-720p.mp4"
-# VIDEO_PATH = "video_input/kraken-vs-knackwurst-stream-720.mp4"
+VIDEO_PATH = "video_input/Training images/duck.mp4"
+# VIDEO_PATH = "video_input/Training images/bogbots-kraken/knackwurst-kraken-720p.mp4"
+# VIDEO_PATH = "video_input/Training images/nhrl-usawgi/usawgi-madgasher-720p.mp4"
 # VIDEO_PATH = "video_input/Training images/nhrl-the-wall/the-wall-720p.mp4"
 # VIDEO_PATH = "video_input/Training images/nhrl-stingoperation/whosearl-stingoperation-720p.mp4"
-CAMERA_INDEX = 1
+CAMERA_INDEX = 0
 FRAME_WIDTH = 1280
 FRAME_HEIGHT = 720
 
@@ -32,14 +33,15 @@ TAG_SIZE_MM = 50
 
 # --- TRACKING ---
 # Bogbots arena
-# ARENA_POINTS = [(340,60), (FRAME_WIDTH-370, 90), (FRAME_WIDTH, FRAME_HEIGHT-150), (FRAME_WIDTH, FRAME_HEIGHT), (0, FRAME_HEIGHT), (0, FRAME_HEIGHT-200)]
-# NHRL cage 2
-ARENA_POINTS = [(350,40), (FRAME_WIDTH-320, 30), (FRAME_WIDTH, FRAME_HEIGHT-150), (FRAME_WIDTH, FRAME_HEIGHT), (0, FRAME_HEIGHT), (0, FRAME_HEIGHT-150)]
-YOLO_MODEL_PATH = "robot_modelv2.pt"
+ARENA_POINTS = [(340,60), (FRAME_WIDTH-370, 90), (FRAME_WIDTH, FRAME_HEIGHT-150), (FRAME_WIDTH, FRAME_HEIGHT), (0, FRAME_HEIGHT), (0, FRAME_HEIGHT-200)]
+# NHRL cage 2 & ~6
+# ARENA_POINTS = [(350,40), (FRAME_WIDTH-320, 30), (FRAME_WIDTH, FRAME_HEIGHT-150), (FRAME_WIDTH, FRAME_HEIGHT), (0, FRAME_HEIGHT), (0, FRAME_HEIGHT-150)]
+
+YOLO_MODEL_PATH = "models/robot_modelv2.pt"
 YOLO_CONFIDENCE = 0.5
 SMOOTHING_ALPHA = 0.4
 
-CAMERA_CALIB_FILE = "camera_calibration.npz"
+CAMERA_CALIB_FILE = "calibration/camera_calibration.npz"
 
 def load_camera_params():
     if os.path.exists(CAMERA_CALIB_FILE):

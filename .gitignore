@@ -3,9 +3,10 @@
 /__pycache__
 
 # Calibration stuff
-/calibration_images
-/calibration_images_*
-opponent_color_calibration.npz
+/calibration/*
+!/calibration/.gitkeep
+!/calibration/*.npz
+/calibration_images*
 
 # Training data
 /video_output/*

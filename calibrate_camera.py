@@ -104,8 +104,8 @@ if len(objpoints) >= 6:
         print("Camera matrix (mtx):\n", mtx)
         print("Distortion coefficients (dist):\n", dist)
 
-        np.savez("camera_calibration.npz", mtx=mtx, dist=dist)
-        print("\nCalibration parameters saved to 'camera_calibration.npz'")
+        np.savez("calibration/camera_calibration.npz", mtx=mtx, dist=dist)
+        print("\nCalibration parameters saved to 'calibration/camera_calibration.npz'")
 
         mean_error = 0
         for i in range(len(objpoints)):

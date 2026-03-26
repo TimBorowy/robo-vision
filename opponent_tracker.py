@@ -9,7 +9,7 @@ class OpponentTracker:
     Tracks the opponent using YOLOv8.
     Visualizes all potential robot candidates in white and the filtered target in red.
     """
-    def __init__(self, model_path='robot_model.pt', confidence=0.45):
+    def __init__(self, model_path='models/robot_modelv2.pt', confidence=0.45):
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         print(f"OpponentTracker: Initializing YOLOv8 on {self.device}...")
 

@@ -3,7 +3,7 @@ from ultralytics import YOLO
 
 def main():
     # Load the base model
-    model = YOLO('yolov8n.pt')
+    model = YOLO('models/yolov8n.pt')
 
     # Start training
     # We specify device=0 to use your 3060 Ti
